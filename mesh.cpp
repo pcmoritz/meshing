@@ -1,6 +1,9 @@
 #include <vector>
 #include <iostream>
+#include <cmath>
 
+#include <CGAL/Nef_polyhedron_3.h>
+#include <CGAL/Aff_transformation_3.h>
 #include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
 #include <CGAL/Mesh_triangulation_3.h>
 #include <CGAL/Mesh_complex_3_in_triangulation_3.h>
@@ -21,11 +24,15 @@
 
 #include <dolfin/generation/CGALMeshBuilder.h>
 #include "cgal_triangulate_polyhedron.h"
-#include "cgal_csg3d.h"
+// #include "cgal_csg3d.h"
 
 #include <dolfin/plot/plot.h>
 
 using namespace dolfin;
+
+typedef CGAL::Exact_predicates_exact_constructions_kernel Exact_Kernel;
+typedef CGAL::Nef_polyhedron_3<Exact_Kernel> Nef_polyhedron_3;
+    typedef CGAL::Polyhedron_3<Exact_Kernel> Exact_Polyhedron_3;
 
 typedef CGAL::Exact_predicates_inexact_constructions_kernel K;
 
@@ -98,12 +105,29 @@ void cgal_generate(Mesh& mesh, T& p, double cell_size,
   CGALMeshBuilder::build_from_mesh(mesh, c3t3);
 }
 
-
+// Apply a transformation of the form QP + t to the polyhedron P where
+// Q is the rotation given by a quaternion (x, y, z, w) and t is a
+// translation vector.
+Polyhedron transformed_polyhedron(Polyhedron& P, double x, double y,
+				  double z, double w, double tx, double ty,
+				  double tz) {
+  double s = std::sin(w);
+  double c = std::cos(w);
+  // Rotation
+  CGAL::Aff_transformation_3<K>
+    R(c + x*x*(1-c), x*y*(1-c) - z*s, x*z*(1-c) + y*s,
+      y*x*(1-c) + z*s, c + y*y*(1-c), y*z*(1-c) - x*s,
+      z*x*(1-c) - y*x, z*y*(1-c) + x*s, c + z*z*(1-c));
+  // Translation
+  CGAL::Aff_transformation_3<K> T(1, 0, 0, tx, 0, 1, 0, ty, 0, 0, 1, tz);
+  std::transform(P.points_begin(), P.points_end(), P.points_begin(), T*R);
+  return P;
+}
 
 
 int main() {
   std::string off_file = "../cube.off";
-  Polyhedron p;
+  Polyhedron p; // unit cube
   std::cout << "reading file " << off_file << std::endl;
   std::ifstream p_file(off_file.c_str());
   p_file >> p;
@@ -111,6 +135,19 @@ int main() {
   double cell_size = 0.5;
   bool detect_sharp_features = true;
   Mesh mesh;
+  
+  Polyhedron outer(p);
+  
+  // scale and translate the outer box
+  CGAL::Aff_transformation_3<K> S(4, 0, 0, -1, 0, 3, 0, -1, 0, 0, 2.5, -1);
+  std::transform(outer.points_begin(), outer.points_end(), 
+		 outer.points_begin(), S);
+
+  Polyhedron first_inner(p);
+
+  Nef_polyhedron_3 Omega();
+
+  // Omega -= first_inner;
 
   cgal_generate(mesh, p, cell_size, detect_sharp_features);
   plot(mesh, "mesh of a cube");

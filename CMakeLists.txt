@@ -12,7 +12,15 @@ find_package(CGAL)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -frounding-math")
 
+find_package(Eigen REQUIRED)
+include_directories(${Eigen_INCLUDE_DIRS})
+
 # message("${CGAL_LIBRARIES}")
+
+message("Generating the model...")
+execute_process(COMMAND source ~/Work/FEniCS/share/dolfin/dolfin.conf)
+execute_process(COMMAND ffc -l dolfin model.ufl
+  WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
 
 link_directories("/usr/lib/")
 include_directories("${DOLFIN_INCLUDE_DIRS}")

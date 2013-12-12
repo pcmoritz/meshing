@@ -1,4 +1,4 @@
-#include <vector>
+// #include <vector>
 #include <iostream>
 #include <cmath>
 
@@ -13,6 +13,7 @@
 #include <CGAL/Triangulation_vertex_base_with_info_3.h>
 #include <CGAL/Triangulation_cell_base_with_info_3.h>
 #include <CGAL/make_mesh_3.h>
+#include <CGAL/Cartesian_converter.h>
 
 #include <dolfin/common/MPI.h>
 #include <dolfin/log/log.h>
@@ -30,7 +31,13 @@
 #include "cgal_copy_polygon_to.h"
 #include "cgal_csg3d.h"
 
+#include <dolfin.h>
+#include "model.h"
+
 using namespace dolfin;
+
+typedef CGAL::Simple_cartesian<double> IK;
+typedef CGAL::Cartesian_converter<IK,csg::Exact_Kernel> IK_to_EK;
 
 void build_mesh(const csg::C3t3& c3t3, Mesh& mesh)
 {
@@ -103,35 +110,102 @@ void generate(Mesh& mesh, const csg::Polyhedron_3& p, double cell_size) {
 			      CGAL::parameters::facet_size = cell_size,
 			      CGAL::parameters::cell_radius_edge_ratio = 3.0,
 			      CGAL::parameters::edge_size = cell_size);
+
+  std::cout << "Generating mesh" << std::endl;
   csg::C3t3 c3t3 = CGAL::make_mesh_3<csg::C3t3>(domain, criteria,
                                                 CGAL::parameters::no_perturb(),
                                                 CGAL::parameters::no_exude());
+  // optimize mesh
+  std::cout << "Optimizing mesh by odt optimization" << std::endl;
+  odt_optimize_mesh_3(c3t3, domain);
+  std::cout << "Optimizing mesh by lloyd optimization" << std::endl;
+  lloyd_optimize_mesh_3(c3t3, domain);
+  // This is too slow. Is it really needed?
+  // std::cout << "Optimizing mesh by perturbation" << std::endl;
+  // CGAL::perturb_mesh_3(c3t3, domain);
+  std::cout << "Optimizing mesh by sliver exudation" << std::endl;
+  exude_mesh_3(c3t3);
+
   build_mesh(c3t3, mesh);
 }
 
-
-
-// Apply a transformation of the form QP + t to the polyhedron P where
-// Q is the rotation given by a quaternion (x, y, z, w) and t is a
-// translation vector.
-csg::Exact_Polyhedron_3
-transformed(csg::Exact_Polyhedron_3& P,
-	    double x, double y, double z,
-	    double w, double tx, double ty, double tz) {
-  double s = std::sin(w);
-  double c = std::cos(w);
+// The transformation first scales the object by the vector (a, b, c),
+// then rotates it by the quaternion (x, y, z, w) and then shifts it
+// by the vector (t, u, v).
+template<class K>
+CGAL::Aff_transformation_3<K> trans(double a, double b, double c,
+				    double x, double y, double z, double w,
+				    double t, double u, double v)
+{
+  double S = std::sin(w);
+  double C = std::cos(w);
+  // Scaling
+  CGAL::Aff_transformation_3<K> scal(a, 0, 0, 0, b, 0, 0, 0, c);
+  
   // Rotation
-  CGAL::Aff_transformation_3<csg::Exact_Kernel>
-    R(c + x*x*(1-c), x*y*(1-c) - z*s, x*z*(1-c) + y*s,
-      y*x*(1-c) + z*s, c + y*y*(1-c), y*z*(1-c) - x*s,
-      z*x*(1-c) - y*x, z*y*(1-c) + x*s, c + z*z*(1-c));
+  CGAL::Aff_transformation_3<K>
+    rot(C + x*x*(1-C), x*y*(1-C) - z*S, x*z*(1-C) + y*S,
+      y*x*(1-C) + z*S, C + y*y*(1-C), y*z*(1-C) - x*S,
+      z*x*(1-C) - y*S, z*y*(1-C) + x*S, C + z*z*(1-C));
+
   // Translation
   CGAL::Aff_transformation_3<csg::Exact_Kernel>
-    T(1, 0, 0, tx, 0, 1, 0, ty, 0, 0, 1, tz);
-  std::transform(P.points_begin(), P.points_end(), P.points_begin(), T*R);
-  return P;
+    trans(1, 0, 0, t, 0, 1, 0, u, 0, 0, 1, v);
+  
+  return trans * rot * scal;
 }
 
+typedef CGAL::Aff_transformation_3<csg::Exact_Kernel> Aff_trans_3;
+
+// Test if Point p is on the boundary of the cube which is the
+// standard (-1, -1, -1) -- (1, 1, 1) cube transformed by the
+// transformation t, within a precision of eps
+bool is_on_boundary(const csg::Exact_Point_3& p, const Aff_trans_3& t,
+		    double eps = 1e-7)
+{
+  csg::Exact_Point_3 q = t.inverse()(p);
+  // Test if point is inside of a cube that is a bit larger
+  if(!(CGAL::abs(q.x()) <= 1 + eps &&
+       CGAL::abs(q.y()) <= 1 + eps &&
+       CGAL::abs(q.z()) <= 1 + eps))
+    return false;
+  // Test if point is outside of a cube that is a bit smaller
+  if(!(CGAL::abs(q.x()) >= 1 - eps &&
+       CGAL::abs(q.y()) >= 1 - eps &&
+       CGAL::abs(q.z()) >= 1 - eps))
+    return false;
+  return true;
+}
+
+struct CubeDomain : public SubDomain
+{
+  Aff_trans_3 trans;
+  CubeDomain(const Aff_trans_3& t) : trans(t) {}
+  bool inside(const Array<double>& x, bool on_boundary) const
+  {
+    return is_on_boundary(csg::Exact_Point_3(x[0], x[1], x[2]), trans)
+      && on_boundary;
+  }
+};
+
+// Evaluate the transformation from the boundary of one cube to the
+// boundary of a transformed cube.
+struct CubeToCube : public Expression
+{
+  Aff_trans_3 first_cube;
+  Aff_trans_3 second_cube;
+  CubeToCube (const Aff_trans_3& a, const Aff_trans_3& b)
+    : Expression(3), first_cube(a), second_cube(b) {}
+  void eval(Array<double>& values, const Array<double>& x) const
+  {
+    IK_to_EK to_exact;
+    csg::Exact_Point_3 p(to_exact(x[0]), to_exact(x[1]), to_exact(x[2]));
+    (second_cube * first_cube.inverse())(p);
+    values[0] = CGAL::to_double(p[0]);
+    values[1] = CGAL::to_double(p[1]);
+    values[2] = CGAL::to_double(p[2]);
+  }
+};
 
 int main() {
   std::string off_file = "../cube.off";
@@ -142,31 +216,79 @@ int main() {
   std::cout << "done reading file." << std::endl;
   double cell_size = 0.5;
   bool detect_sharp_features = true;
-  Mesh mesh;
+  Mesh m;
   
   csg::Exact_Polyhedron_3 outer(cube);
   
-  // scale and translate the outer box
-  CGAL::Aff_transformation_3<csg::Exact_Kernel> S(4, 0, 0, -1, 0, 3, 0, -1, 0, 0, 2.5, -1);
+  // scale the outer box
+  CGAL::Aff_transformation_3<csg::Exact_Kernel>
+    St(4, 0, 0, 0, 0, 3, 0, 0, 0, 0, 2.5, 0);
   std::transform(outer.points_begin(), outer.points_end(), 
-  		 outer.points_begin(), S);
+  		 outer.points_begin(), St);
 
+  // scale the inner box
+  CGAL::Aff_transformation_3<csg::Exact_Kernel>
+    Et(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0);
   csg::Nef_polyhedron_3 Omega(outer);
   csg::Exact_Polyhedron_3 first_inner(cube);
-  csg::Exact_Polyhedron_3 second_inner(cube);
-  second_inner = transformed(second_inner, 0, 0, 1, 0.1, 1.5, 0, 0);
+  // csg::Exact_Polyhedron_3 second_inner(cube);
+  // second_inner = transformed(second_inner, 0, 0, 1, 0.1, 1.5, 0, 0);
   
   Omega -= first_inner;
-  Omega -= second_inner;
+  // Omega -= second_inner;
 
   csg::Exact_Polyhedron_3 p;
   Omega.convert_to_polyhedron(p);
   csg::Polyhedron_3 q;
   copy_to(p, q);
-  
 
-  generate(mesh, q, cell_size);
-  plot(mesh, "mesh of a cube");
+  generate(m, q, cell_size);
+  
+  plot(m, "mesh of a cube");
   interactive(true);
+
+  std::cout << "Solving the variational problem" << std::endl;
+  model::FunctionSpace V(m);
+
+  CubeDomain first_inner_domain(Et);
+  CubeToCube c2c(Et, Et);
+  CubeDomain outer_domain(St);
+  CubeToCube o2o(St, St);
+
+  // Create Dirichlet boundary conditions
+  DirichletBC bci(V, c2c, first_inner_domain);
+  DirichletBC bco(V, o2o, outer_domain);
+  std::vector<const DirichletBC*> bcs;
+  bcs.push_back(&bci);
+  bcs.push_back(&bco);
+  
+  // Define source and boundary traction functions
+  Constant B(0.0, -0.5, 0.0);
+  Constant T(0.1,  0.0, 0.0);
+
+  // Define solution function
+  Function u(V);
+
+  // Set material parameters
+  const double E  = 10.0;
+  const double nu = 0.3;
+  Constant mu(E/(2*(1 + nu)));
+  Constant lambda(E*nu/((1 + nu)*(1 - 2*nu)));
+
+  // Create (linear) form defining (nonlinear) variational problem
+  model::ResidualForm F(V);
+  F.mu = mu; F.lmbda = lambda; F.B = B; F.T = T; F.u = u;
+
+  // Create jacobian dF = F' (for use in nonlinear solver).
+  model::JacobianForm J(V, V);
+  J.mu = mu; J.lmbda = lambda; J.u = u;
+
+  // Solve nonlinear variational problem F(u; v) = 0
+  solve(F == 0, u, bcs, J);
+
+  // Plot solution
+  plot(u);
+  interactive();
+
   std::getchar();
 }

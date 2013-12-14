@@ -1,6 +1,7 @@
 // #include <vector>
 #include <iostream>
 #include <cmath>
+#include <fstream>
 
 #include <CGAL/Nef_polyhedron_3.h>
 #include <CGAL/Aff_transformation_3.h>
@@ -126,6 +127,11 @@ void generate(Mesh& mesh, const csg::Polyhedron_3& p, double cell_size) {
   std::cout << "Optimizing mesh by sliver exudation" << std::endl;
   exude_mesh_3(c3t3);
 
+  std::fstream out;
+  out.open("~/mesh.txt");
+  out << c3t3;
+  out.close();
+
   build_mesh(c3t3, mesh);
 }
 
@@ -161,18 +167,18 @@ typedef CGAL::Aff_transformation_3<csg::Exact_Kernel> Aff_trans_3;
 // standard (-1, -1, -1) -- (1, 1, 1) cube transformed by the
 // transformation t, within a precision of eps
 bool is_on_boundary(const csg::Exact_Point_3& p, const Aff_trans_3& t,
-		    double eps = 1e-7)
+		    double eps = 10000)
 {
   csg::Exact_Point_3 q = t.inverse()(p);
   // Test if point is inside of a cube that is a bit larger
-  if(!(CGAL::abs(q.x()) <= 1 + eps &&
-       CGAL::abs(q.y()) <= 1 + eps &&
-       CGAL::abs(q.z()) <= 1 + eps))
+  if(!((CGAL::abs(q.x()) <= 1 + eps) &&
+       (CGAL::abs(q.y()) <= 1 + eps) &&
+       (CGAL::abs(q.z()) <= 1 + eps)))
     return false;
   // Test if point is outside of a cube that is a bit smaller
-  if(!(CGAL::abs(q.x()) >= 1 - eps &&
-       CGAL::abs(q.y()) >= 1 - eps &&
-       CGAL::abs(q.z()) >= 1 - eps))
+  if(!((CGAL::abs(q.x()) >= 1 - eps) &&
+       (CGAL::abs(q.y()) >= 1 - eps) &&
+       (CGAL::abs(q.z()) >= 1 - eps)))
     return false;
   return true;
 }

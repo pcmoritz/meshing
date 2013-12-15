@@ -14,6 +14,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -frounding-math")
 
 find_package(Eigen REQUIRED)
 include_directories(${Eigen_INCLUDE_DIRS})
+include_directories("/usr/include/eigen3/")
 
 # message("${CGAL_LIBRARIES}")
 

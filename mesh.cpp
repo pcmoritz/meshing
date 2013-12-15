@@ -117,18 +117,18 @@ void generate(Mesh& mesh, const csg::Polyhedron_3& p, double cell_size) {
                                                 CGAL::parameters::no_perturb(),
                                                 CGAL::parameters::no_exude());
   // optimize mesh
-  std::cout << "Optimizing mesh by odt optimization" << std::endl;
-  odt_optimize_mesh_3(c3t3, domain);
-  std::cout << "Optimizing mesh by lloyd optimization" << std::endl;
-  lloyd_optimize_mesh_3(c3t3, domain);
+  // std::cout << "Optimizing mesh by odt optimization" << std::endl;
+  // odt_optimize_mesh_3(c3t3, domain);
+  // std::cout << "Optimizing mesh by lloyd optimization" << std::endl;
+  // lloyd_optimize_mesh_3(c3t3, domain);
   // This is too slow. Is it really needed?
   // std::cout << "Optimizing mesh by perturbation" << std::endl;
   // CGAL::perturb_mesh_3(c3t3, domain);
-  std::cout << "Optimizing mesh by sliver exudation" << std::endl;
-  exude_mesh_3(c3t3);
+  // std::cout << "Optimizing mesh by sliver exudation" << std::endl;
+  // exude_mesh_3(c3t3);
 
   std::fstream out;
-  out.open("~/mesh.txt");
+  out.open("~/mesh.txt", std::ios::out);
   out << c3t3;
   out.close();
 
@@ -167,7 +167,7 @@ typedef CGAL::Aff_transformation_3<csg::Exact_Kernel> Aff_trans_3;
 // standard (-1, -1, -1) -- (1, 1, 1) cube transformed by the
 // transformation t, within a precision of eps
 bool is_on_boundary(const csg::Exact_Point_3& p, const Aff_trans_3& t,
-		    double eps = 10000)
+		    double eps = 1e-7)
 {
   csg::Exact_Point_3 q = t.inverse()(p);
   // Test if point is inside of a cube that is a bit larger
@@ -175,10 +175,10 @@ bool is_on_boundary(const csg::Exact_Point_3& p, const Aff_trans_3& t,
        (CGAL::abs(q.y()) <= 1 + eps) &&
        (CGAL::abs(q.z()) <= 1 + eps)))
     return false;
-  // Test if point is outside of a cube that is a bit smaller
-  if(!((CGAL::abs(q.x()) >= 1 - eps) &&
-       (CGAL::abs(q.y()) >= 1 - eps) &&
-       (CGAL::abs(q.z()) >= 1 - eps)))
+  // Test if point is not inside of a cube that is a bit smaller
+  if((CGAL::abs(q.x()) <= 1 - eps) &&
+     (CGAL::abs(q.y()) <= 1 - eps) &&
+     (CGAL::abs(q.z()) <= 1 - eps))
     return false;
   return true;
 }
@@ -186,11 +186,15 @@ bool is_on_boundary(const csg::Exact_Point_3& p, const Aff_trans_3& t,
 struct CubeDomain : public SubDomain
 {
   Aff_trans_3 trans;
-  CubeDomain(const Aff_trans_3& t) : trans(t) {}
+  std::string debug;
+  CubeDomain(const Aff_trans_3& t, std::string d) 
+    : trans(t), debug(d) {}
   bool inside(const Array<double>& x, bool on_boundary) const
   {
-    return is_on_boundary(csg::Exact_Point_3(x[0], x[1], x[2]), trans)
-      && on_boundary;
+    std::cout << x[0] << " " << x[1] << " " << x[2];
+    bool b = is_on_boundary(csg::Exact_Point_3(x[0], x[1], x[2]), trans);
+    std::cout << debug << " " << b << on_boundary << std::endl;
+    return b && on_boundary;
   }
 };
 
@@ -220,7 +224,7 @@ int main() {
   std::ifstream file(off_file.c_str());
   file >> cube;
   std::cout << "done reading file." << std::endl;
-  double cell_size = 0.5;
+  double cell_size = 1.0;
   bool detect_sharp_features = true;
   Mesh m;
   
@@ -239,6 +243,9 @@ int main() {
   csg::Exact_Polyhedron_3 first_inner(cube);
   // csg::Exact_Polyhedron_3 second_inner(cube);
   // second_inner = transformed(second_inner, 0, 0, 1, 0.1, 1.5, 0, 0);
+
+  csg::Exact_Point_3 Q(1, 1, 1);
+  std::cout << "test: " << is_on_boundary(Q, Et) << std::endl;
   
   Omega -= first_inner;
   // Omega -= second_inner;
@@ -256,9 +263,9 @@ int main() {
   std::cout << "Solving the variational problem" << std::endl;
   model::FunctionSpace V(m);
 
-  CubeDomain first_inner_domain(Et);
+  CubeDomain first_inner_domain(Et, "inner");
   CubeToCube c2c(Et, Et);
-  CubeDomain outer_domain(St);
+  CubeDomain outer_domain(St, "outer");
   CubeToCube o2o(St, St);
 
   // Create Dirichlet boundary conditions

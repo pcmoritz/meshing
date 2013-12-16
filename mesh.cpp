@@ -139,9 +139,10 @@ void generate(Mesh& mesh, const csg::Polyhedron_3& p, double cell_size) {
 // then rotates it by the quaternion (x, y, z, w) and then shifts it
 // by the vector (t, u, v).
 template<class K>
-CGAL::Aff_transformation_3<K> trans(double a, double b, double c,
-				    double x, double y, double z, double w,
-				    double t, double u, double v)
+CGAL::Aff_transformation_3<K>
+cgal_transformation(double a, double b, double c,
+		    double x, double y, double z, double w,
+		    double t, double u, double v)
 {
   double S = std::sin(w);
   double C = std::cos(w);
@@ -232,23 +233,26 @@ int main() {
   
   // scale the outer box
   CGAL::Aff_transformation_3<csg::Exact_Kernel>
-    St(4, 0, 0, 0, 0, 3, 0, 0, 0, 0, 2.5, 0);
+    St(4, 0, 0, 0, 0, 3, 0, 0, 0, 0, 2, 0);
   std::transform(outer.points_begin(), outer.points_end(), 
   		 outer.points_begin(), St);
 
   // scale the inner box
   CGAL::Aff_transformation_3<csg::Exact_Kernel>
-    Et(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0);
+    Et(1, 0, 0, -1.5, 0, 1, 0, 0, 0, 0, 0.2, 0);
   csg::Nef_polyhedron_3 Omega(outer);
   csg::Exact_Polyhedron_3 first_inner(cube);
-  // csg::Exact_Polyhedron_3 second_inner(cube);
-  // second_inner = transformed(second_inner, 0, 0, 1, 0.1, 1.5, 0, 0);
+  std::transform(first_inner.points_begin(), first_inner.points_end(), 
+  		 first_inner.points_begin(), Et);
 
-  csg::Exact_Point_3 Q(1, 1, 1);
-  std::cout << "test: " << is_on_boundary(Q, Et) << std::endl;
-  
+  csg::Exact_Polyhedron_3 second_inner(cube);
+  CGAL::Aff_transformation_3<csg::Exact_Kernel> TT = 
+    cgal_transformation<csg::Exact_Kernel>(1.0, 1.0, 0.2, 0.0, 0.0, 1.0, 0.3, 1.5, 0.0, 0.0);
+  std::transform(second_inner.points_begin(), second_inner.points_end(), 
+  		 second_inner.points_begin(), TT);
+
   Omega -= first_inner;
-  // Omega -= second_inner;
+  Omega -= second_inner;
 
   csg::Exact_Polyhedron_3 p;
   Omega.convert_to_polyhedron(p);
@@ -300,19 +304,33 @@ int main() {
   solve(F == 0, u, bcs, J);
 
   // Plot solution
-  plot(u);
-  interactive();
+  // plot(u);
+  // interactive();
 
   std::getchar();
 
-  Array<double> values(3);
-  Array<double> x(3);
-  x[0] = 0.0;
-  x[1] = 0.0;
-  x[2] = 0.0;
+  int N = 5;
+  double wx = 8.0/(N-1);
+  double wy = 6.0/(N-1);
+  double wz = 4.0/(N-1);
 
-  u.eval(values, x);
+  std::fstream out;
+  out.open("~/function-values.txt", std::ios::out);
 
-  std::cout << values[0] << " " << values[1]
-	    << " " << values[2] << std::endl;
+  for(int x = 0; x < N; x++) {
+    for(int y = 0; y < N; y++) {
+      for(int z = 0; z < N; z++) {
+	Array<double> values(3);
+	Array<double> AA(3);
+	AA[0] = x * wx - 4.0;
+	AA[1] = y * wy - 3.0;
+	AA[2] = z * wz - 2.0;
+	u.eval(values, AA);
+	
+	out << values[0] << " " << values[1] << " " << values[2] << std::endl;
+      }
+    }
+  }
+  
+  out.close();
 }

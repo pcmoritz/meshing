@@ -192,9 +192,9 @@ struct CubeDomain : public SubDomain
     : trans(t), debug(d) {}
   bool inside(const Array<double>& x, bool on_boundary) const
   {
-    std::cout << x[0] << " " << x[1] << " " << x[2];
+    // std::cout << x[0] << " " << x[1] << " " << x[2];
     bool b = is_on_boundary(csg::Exact_Point_3(x[0], x[1], x[2]), trans);
-    std::cout << debug << " " << b << on_boundary << std::endl;
+    // std::cout << debug << " " << b << on_boundary << std::endl;
     return b && on_boundary;
   }
 };
@@ -267,16 +267,20 @@ int main() {
   std::cout << "Solving the variational problem" << std::endl;
   model::FunctionSpace V(m);
 
-  CubeDomain first_inner_domain(Et, "inner");
-  CubeToCube c2c(Et, Et);
+  CubeDomain first_inner_domain(Et, "first inner");
+  CubeToCube first_map(Et, Et);
+  CubeDomain second_inner_domain(TT, "second inner");
+  CubeToCube second_map(TT, TT);
   CubeDomain outer_domain(St, "outer");
   CubeToCube o2o(St, St);
 
   // Create Dirichlet boundary conditions
-  DirichletBC bci(V, c2c, first_inner_domain);
+  DirichletBC bci1(V, first_map, first_inner_domain);
+  DirichletBC bci2(V, second_map, second_inner_domain);
   DirichletBC bco(V, o2o, outer_domain);
   std::vector<const DirichletBC*> bcs;
-  bcs.push_back(&bci);
+  bcs.push_back(&bci1);
+  bcs.push_back(&bci2);
   bcs.push_back(&bco);
   
   // Define source and boundary traction functions
@@ -321,13 +325,19 @@ int main() {
     for(int y = 0; y < N; y++) {
       for(int z = 0; z < N; z++) {
 	Array<double> values(3);
-	Array<double> AA(3);
-	AA[0] = x * wx - 4.0;
-	AA[1] = y * wy - 3.0;
-	AA[2] = z * wz - 2.0;
-	u.eval(values, AA);
-	
-	out << values[0] << " " << values[1] << " " << values[2] << std::endl;
+	Array<double> location(3);
+	location[0] = x * wx - 4.0;
+	location[1] = y * wy - 3.0;
+	location[2] = z * wz - 2.0;
+
+	if(first_inner_domain.inside(location, true) || 
+	   second_inner_domain.inside(location, true)) {
+	  out << "NA" << std::endl;
+	}
+	else {
+	  u.eval(values, location);
+	  out << values[0] << " " << values[1] << " " << values[2] << std::endl;
+	}
       }
     }
   }

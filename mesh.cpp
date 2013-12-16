@@ -127,10 +127,10 @@ void generate(Mesh& mesh, const csg::Polyhedron_3& p, double cell_size) {
   // std::cout << "Optimizing mesh by sliver exudation" << std::endl;
   // exude_mesh_3(c3t3);
 
-  std::fstream out;
-  out.open("~/mesh.txt", std::ios::out);
-  out << c3t3;
-  out.close();
+  //std::fstream out;
+  //out.open("~/mesh.txt", std::ios::out);
+  //out << c3t3;
+  //out.close();
 
   build_mesh(c3t3, mesh);
 }
@@ -261,9 +261,12 @@ int main() {
 
   generate(m, q, cell_size);
   
+  /*
   plot(m, "mesh of a cube");
   interactive(true);
+  */
 
+  /*
   std::cout << "Solving the variational problem" << std::endl;
   model::FunctionSpace V(m);
 
@@ -343,4 +346,5 @@ int main() {
   }
   
   out.close();
+  */
 }

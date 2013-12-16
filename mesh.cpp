@@ -242,6 +242,7 @@ int main() {
   double cell_size = 1.0;
   bool detect_sharp_features = true;
   Mesh m;
+  Mesh m2;
   
   csg::Exact_Polyhedron_3 outer(cube);
   
@@ -255,6 +256,7 @@ int main() {
   CGAL::Aff_transformation_3<csg::Exact_Kernel>
     Et(1, 0, 0, -1.5, 0, 1, 0, 0, 0, 0, 0.2, 0);
   csg::Nef_polyhedron_3 Omega(outer);
+  csg::Nef_polyhedron_3 Omega2(outer);
   csg::Exact_Polyhedron_3 first_inner(cube);
   std::transform(first_inner.points_begin(), first_inner.points_end(), 
   		 first_inner.points_begin(), Et);
@@ -267,12 +269,15 @@ int main() {
 
   csg::Exact_Polyhedron_3 third_inner(cube);
   CGAL::Aff_transformation_3<csg::Exact_Kernel> TTT = 
-    cgal_transformation<csg::Exact_Kernel>(1.0, 1.0, 0.2, 0.0, 0.0, 1.0, 0.3, 2.0, 0.5, 0.5);
+    cgal_transformation<csg::Exact_Kernel>(1.0, 1.5, 0.4, 1.0, 0.0, 0.0, 0.5, 2.0, 1.5, 0.5);
   std::transform(third_inner.points_begin(), third_inner.points_end(), 
   		 third_inner.points_begin(), TTT);
 
   Omega -= first_inner;
   Omega -= second_inner;
+
+  Omega2 -= first_inner;
+  Omega2 -= third_inner;
 
   csg::Exact_Polyhedron_3 p;
   Omega.convert_to_polyhedron(p);
@@ -282,6 +287,16 @@ int main() {
   generate(m, q, cell_size);
   
   plot(m, "mesh of a cube");
+  interactive(true);
+
+  csg::Exact_Polyhedron_3 p2;
+  Omega2.convert_to_polyhedron(p2);
+  csg::Polyhedron_3 q2;
+  copy_to(p2, q2);
+
+  generate(m2, q2, cell_size);
+  
+  plot(m2, "mesh of a cube");
   interactive(true);
 
   std::cout << "Solving the variational problem" << std::endl;

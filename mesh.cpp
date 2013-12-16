@@ -269,7 +269,7 @@ int main() {
 
   csg::Exact_Polyhedron_3 third_inner(cube);
   CGAL::Aff_transformation_3<csg::Exact_Kernel> TTT = 
-    cgal_transformation<csg::Exact_Kernel>(1.0, 1.5, 0.4, 1.0, 0.0, 0.0, 0.5, 2.0, 1.5, 0.5);
+    cgal_transformation<csg::Exact_Kernel>(1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.5, 1.0, 1.5, 0.5);
   std::transform(third_inner.points_begin(), third_inner.points_end(), 
   		 third_inner.points_begin(), TTT);
 
@@ -348,7 +348,7 @@ int main() {
 
   //std::getchar();
 
-  int N = 10;
+  int N = 20;
   double wx = 7.8/(N-1);
   double wy = 5.8/(N-1);
   double wz = 3.8/(N-1);

@@ -265,6 +265,12 @@ int main() {
   std::transform(second_inner.points_begin(), second_inner.points_end(), 
   		 second_inner.points_begin(), TT);
 
+  csg::Exact_Polyhedron_3 third_inner(cube);
+  CGAL::Aff_transformation_3<csg::Exact_Kernel> TTT = 
+    cgal_transformation<csg::Exact_Kernel>(1.0, 1.0, 0.2, 0.0, 0.0, 1.0, 0.3, 2.0, 0.5, 0.5);
+  std::transform(third_inner.points_begin(), third_inner.points_end(), 
+  		 third_inner.points_begin(), TTT);
+
   Omega -= first_inner;
   Omega -= second_inner;
 
@@ -284,7 +290,7 @@ int main() {
   CubeDomain first_inner_domain(Et, "first inner");
   CubeToCube first_map(Et, Et);
   CubeDomain second_inner_domain(TT, "second inner");
-  CubeToCube second_map(TT, TT);
+  CubeToCube second_map(TT, TTT);
   CubeDomain outer_domain(St, "outer");
   CubeToCube o2o(St, St);
 
@@ -327,7 +333,7 @@ int main() {
 
   //std::getchar();
 
-  int N = 5;
+  int N = 10;
   double wx = 7.8/(N-1);
   double wy = 5.8/(N-1);
   double wz = 3.8/(N-1);

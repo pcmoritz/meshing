@@ -1,4 +1,5 @@
 // #include <vector>
+#include <stdio.h>
 #include <iostream>
 #include <cmath>
 #include <fstream>
@@ -184,6 +185,19 @@ bool is_on_boundary(const csg::Exact_Point_3& p, const Aff_trans_3& t,
   return true;
 }
 
+bool is_inside(const Aff_trans_3& t,
+	       double x, double y, double z, double eps = 1e-7)
+{
+  csg::Exact_Point_3 p(x, y, z);
+  csg::Exact_Point_3 q = t.inverse()(p);
+  // Test if point is inside of a cube that is a bit larger
+  if(!((CGAL::abs(q.x()) <= 1 + eps) &&
+       (CGAL::abs(q.y()) <= 1 + eps) &&
+       (CGAL::abs(q.z()) <= 1 + eps)))
+    return false;
+  return true;
+}
+
 struct CubeDomain : public SubDomain
 {
   Aff_trans_3 trans;
@@ -261,12 +275,9 @@ int main() {
 
   generate(m, q, cell_size);
   
-  /*
   plot(m, "mesh of a cube");
   interactive(true);
-  */
 
-  /*
   std::cout << "Solving the variational problem" << std::endl;
   model::FunctionSpace V(m);
 
@@ -314,37 +325,38 @@ int main() {
   // plot(u);
   // interactive();
 
-  std::getchar();
+  //std::getchar();
 
   int N = 5;
-  double wx = 8.0/(N-1);
-  double wy = 6.0/(N-1);
-  double wz = 4.0/(N-1);
+  double wx = 7.8/(N-1);
+  double wy = 5.8/(N-1);
+  double wz = 3.8/(N-1);
 
   std::fstream out;
-  out.open("~/function-values.txt", std::ios::out);
+  out.open("/home/robertnishihara/function-values.txt", std::ios::out);
 
   for(int x = 0; x < N; x++) {
     for(int y = 0; y < N; y++) {
       for(int z = 0; z < N; z++) {
 	Array<double> values(3);
 	Array<double> location(3);
-	location[0] = x * wx - 4.0;
-	location[1] = y * wy - 3.0;
-	location[2] = z * wz - 2.0;
+	location[0] = x * wx - 3.9;
+	location[1] = y * wy - 2.9;
+	location[2] = z * wz - 1.9;
 
-	if(first_inner_domain.inside(location, true) || 
-	   second_inner_domain.inside(location, true)) {
+	if(is_inside(TT, location[0], location[1], location[2]) || 
+	   is_inside(Et, location[0], location[1], location[2])) {
 	  out << "NA" << std::endl;
+	  //printf("inside\n");
 	}
 	else {
 	  u.eval(values, location);
 	  out << values[0] << " " << values[1] << " " << values[2] << std::endl;
+	  //printf("%f %f %f\n", values[0], values[1], values[2]);
 	}
       }
     }
   }
   
   out.close();
-  */
 }
